@@ -18,7 +18,7 @@ Requires PHP 5.3+.
 Basic Usage
 -----
 
-A simple file setup is located in the 'example' directory.
+A simple file setup is located under 'example' directory.
 Here's a basic usage example:
 
 ```php
@@ -33,7 +33,7 @@ $route->get('/', function(){
 $route->dispatch();
 ```
 
-The avaible methods are the following:
+Available methods are the following:
 
 ```php
 $route->get('/...', function(){ /*...*/ });
