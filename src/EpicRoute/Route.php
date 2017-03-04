@@ -83,15 +83,7 @@ class Route{
         return $arr;
     }
 
-    /**
-     * Matching the GET $url with the class of function $view
-     *
-     * @param string $url
-     * @param string $view
-     * @param array $options array with the options
-     * @return $this
-     */
-    public function get($url, $view, array $options = null){
+    private function addToTree(array &$methorTree, $url, $view, array $options = null){
         if($options != null) {
             $options = array_merge_recursive($options, $this->addToNext);
         } else {
@@ -101,10 +93,22 @@ class Route{
         if(isset($options['middleware'])){
             $middleware = $options['middleware'];
         }
-        self::buildTree($this->getRouteTree, static::splitUrl($url), $view, $middleware);
+        $this->buildTree($methorTree, $this->splitUrl($url), $view, $middleware);
+        return $this;
+    }
+
+    /**
+     * Matching the GET $url with the class of function $view
+     *
+     * @param string $url
+     * @param string $view
+     * @param array $options array with the options
+     * @return $this
+     */
+    public function get($url, $view, array $options = null){
         if(isset($options['name']) && $options['name'] != null)
             $this->routeNames[$options['name']] = $url;
-        return $this;
+        return $this->addToTree($this->getRouteTree, $url, $view, $options);
     }
 
     /**
@@ -117,17 +121,7 @@ class Route{
      * @return $this
      */
     public function post($url, $view, array $options = null){
-        if($options != null) {
-            $options = array_merge($options, $this->addToNext);
-        } else {
-            $options = $this->addToNext;
-        }
-        $middleware = null;
-        if(isset($options['middleware'])){
-            $middleware = $options['middleware'];
-        }
-        $this->buildTree($this->postRouteTree, static::splitUrl($url), $view, $middleware);
-        return $this;
+        return $this->addToTree($this->postRouteTree, $url, $view, $options);
     }
 
     /**
@@ -140,17 +134,7 @@ class Route{
      * @return $this
      */
     public function put($url, $view, array $options = null){
-        if($options != null) {
-            $options = array_merge($options, $this->addToNext);
-        } else {
-            $options = $this->addToNext;
-        }
-        $middleware = null;
-        if(isset($options['middleware'])){
-            $middleware = $options['middleware'];
-        }
-        $this->buildTree($this->putRouteTree, static::splitUrl($url), $view, $middleware);
-        return $this;
+        return $this->addToTree($this->putRouteTree, $url, $view, $options);
     }
 
     /**
@@ -163,17 +147,7 @@ class Route{
      * @return $this
      */
     public function patch($url, $view, array $options = null){
-        if($options != null) {
-            $options = array_merge($options, $this->addToNext);
-        } else {
-            $options = $this->addToNext;
-        }
-        $middleware = null;
-        if(isset($options['middleware'])){
-            $middleware = $options['middleware'];
-        }
-        $this->buildTree($this->patchRouteTree, static::splitUrl($url), $view, $middleware);
-        return $this;
+        return $this->addToTree($this->patchRouteTree, $url, $view, $options);
     }
 
     /**
@@ -186,17 +160,7 @@ class Route{
      * @return $this
      */
     public function delete($url, $view, array $options = null){
-        if($options != null) {
-            $options = array_merge($options, $this->addToNext);
-        } else {
-            $options = $this->addToNext;
-        }
-        $middleware = null;
-        if(isset($options['middleware'])){
-            $middleware = $options['middleware'];
-        }
-        $this->buildTree($this->deleteRouteTree, static::splitUrl($url), $view, $middleware);
-        return $this;
+        return $this->addToTree($this->deleteRouteTree, $url, $view, $options);
     }
 
     /**
@@ -237,7 +201,7 @@ class Route{
         if(sizeof($path) > 1){
             $path = array_filter($path);
         }
-        switch (static::getMethod()){
+        switch ($this->getMethod()){
             case 'GET':
                 $next = &$this->getRouteTree;
                 break;
@@ -305,7 +269,8 @@ class Route{
         $path_only = parse_url($path, PHP_URL_PATH);
         $n = strlen($this->baseUrl) + 1;
         $page = substr($path_only, $n);
-        $result = self::findView(htmlspecialchars($page));
+
+        $result = $this->findView($page);
 
         if(!isset($result['view']) || $result['view'] == null){
             header("HTTP/1.0 404 Not Found");
@@ -317,7 +282,7 @@ class Route{
             if(is_subclass_of($result['middleware'], Middleware::class)){
                 $middleware = new $result['middleware'];
                 $middleware->before();
-                static::executeAction($result['view']);
+                $this->executeAction($result['view']);
                 $middleware->after();
             } else if(is_array($result['middleware'])){
                 $reverseMW = array();
@@ -326,21 +291,23 @@ class Route{
                     $middleware->before();
                     array_unshift($reverseMW, $middleware);
                 }
-                static::executeAction($result['view']);
+                $this->executeAction($result['view']);
                 foreach ($reverseMW as $middleware){
                     $middleware->after();
                 }
             }
         } else {
-            static::executeAction($result['view']);
+            $this->executeAction($result['view']);
         }
     }
 
     private function executeAction($result){
         if(is_callable($result)){
             call_user_func_array($result, $this->matchParams);
-        } else if(class_exists($result)){
-            new $result();
+        } else if(is_array($result)){
+            call_user_func_array(array(new $result[0], new $result[1]), $this->matchParams);
+        }else if(class_exists($result)){
+            (new \ReflectionClass($result))->newInstanceArgs($this->matchParams);
         }
     }
 
@@ -366,13 +333,13 @@ class Route{
      * @param $getVar string getParams like var=value&var2=value2...
      */
     public function redirect($name, $getVar = null){
-        $url = $this->baseUrl . '/' . static::getViewUrl($name);
+        $url = $this->baseUrl . '/' . $this->getViewUrl($name);
         if($getVar != null){
             $url = $url . '?' . $getVar;
         }
         if($_SERVER['REQUEST_URI'] == $url && !headers_sent()){
             $_POST = array();
-            static::dispatch($url);
+            $this->dispatch($url);
         } else {
             header('Location: ' . $url);
             die();
