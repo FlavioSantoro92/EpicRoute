@@ -219,6 +219,9 @@ class Route{
                 break;
         }
         for($i = 0; $i < sizeof($path); $i++){
+            if(!isset($path[$i])){
+                $this->error404();
+            }
             $sub = $path[$i];
             if(isset($next[$sub])){
                 $next = &$next[$sub];
@@ -235,10 +238,10 @@ class Route{
                             for($j = $i; $j < sizeof($path); $j++){
                                 $arr[] = $path[$j];
                             }
-                            $this->matchParams[] = preg_replace("/[^A-Za-z0-9-_]/", "", $sub);
+                            $this->matchParams[substr($key, 1)] = preg_replace("/[^A-Za-z0-9-_]/", "", $sub);
                             return $next[$key][''];
                         }
-                        $this->matchParams[] = preg_replace("/[^A-Za-z0-9-_]/", "", $sub);
+                        $this->matchParams[substr($key, 1)] = preg_replace("/[^A-Za-z0-9-_]/", "", $sub);
                         $found = $key;
                         $next = &$next[$found];
                         break;
@@ -254,8 +257,7 @@ class Route{
         if(isset($next[''])) {
             return $next[''];
         }
-        header("HTTP/1.0 404 Not Found");
-        die();
+        $this->error404();
     }
 
     /**
@@ -273,8 +275,7 @@ class Route{
         $result = $this->findView($page);
 
         if(!isset($result['view']) || $result['view'] == null){
-            header("HTTP/1.0 404 Not Found");
-            die();
+            $this->error404();
         }
 
         if(isset($result['middleware'])){
@@ -311,6 +312,11 @@ class Route{
         }
     }
 
+    private function error404(){
+        header("HTTP/1.0 404 Not Found");
+        die();
+    }
+
     /**
      * Return the URL of a view named in the @addRoute method
      *
@@ -333,7 +339,7 @@ class Route{
      * @param $getVar string getParams like var=value&var2=value2...
      */
     public function redirect($name, $getVar = null){
-        $url = $this->baseUrl . '/' . $this->getViewUrl($name);
+        $url = $this->baseUrl . $this->getViewUrl($name);
         if($getVar != null){
             $url = $url . '?' . $getVar;
         }
@@ -344,6 +350,16 @@ class Route{
             header('Location: ' . $url);
             die();
         }
+    }
+
+    /**
+     * Return the value of a param matched in the URL
+     *
+     * @param $name
+     * @return mixed
+     */
+    public function getParam($name){
+        return $this->matchParams[$name];
     }
 
     public function redirectBack(){
